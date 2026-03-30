@@ -1,0 +1,6 @@
+{
+    "cmake.sourceDirectory": "/home/daksh/school/winter-2026/MCTR260_Design/MCTR260-pico-firmware/resources/ble-advertisement-main/ble-advertisement-main",
+    "cmake.configureSettings": {
+        "PICO_SDK_PATH": "/home/daksh/.platformio/packages/framework-arduinopico/pico-sdk"
+    }
+}
