@@ -13,7 +13,8 @@
    // Internal state variables
    static int s_current_step = -1;       // -1 = Idle/Off
    static unsigned long s_step_start_ms = 0;
-   static AutoStep s_sequence[7];        // Your 7 requested moves
+   static const int s_sequence_len = 1;  // Only 1 step active for now
+   static AutoStep s_sequence[7];        // Still keeping buffer for 7
 
    /**
     * @brief Helper to build a command struct without messy JSON
@@ -40,13 +41,12 @@
        // Forward 1m: ~1274ms @ Max Speed
        // Turn 90:    ~400ms  @ Max Speed
 
-       s_sequence[0] = { build_cmd(0, 100, 0),   1274 }; // Forward 1m
-       s_sequence[1] = { build_cmd(0, 0, -100),  400  }; // Turn 90 Left (CCW)
-       s_sequence[2] = { build_cmd(0, 100, 0),   1274 }; // Forward 1m
-       s_sequence[3] = { build_cmd(0, 0, 100),   400  }; // Turn 90 Right (CW)
-       s_sequence[4] = { build_cmd(0, 100, 0),   1274 }; // Forward 1m
-       s_sequence[5] = { build_cmd(0, 0, -100),  200  }; // Turn 45 Left
-       s_sequence[6] = { build_cmd(0, 100, 0),   3185 }; // Forward 2.5m
+       s_sequence[0] = { build_cmd(0, 100, 0),   100 }; // Forward 1m       
+       s_sequence[1] = { build_cmd(100, 0, 0),   100  }; // Left 1m
+       s_sequence[2] = { build_cmd(0, 100, 0),   100 }; // Forward 1m
+       s_sequence[3] = { build_cmd(100, 0, 0),   100  }; // Left 1m
+       s_sequence[5] = { build_cmd(0, 0, -100),  150  }; // Turn 45 Left
+       s_sequence[6] = { build_cmd(0, 100, 0),   150 }; // Forward 2.5m
 
        s_current_step = 0;
        s_step_start_ms = millis();
@@ -67,29 +67,29 @@
        return s_current_step >= 0;
    }
 
-   void automation_tick() {
-       if (!automation_is_active()) return;
+    void automation_tick() {
+        if (!automation_is_active()) return;
 
-       // MANDATORY: Keep the safety watchdog fed!
-       safety_feed();
+        // MANDATORY: Keep the safety watchdog fed!
+        safety_feed();
 
-       unsigned long now = millis();
-       AutoStep& current = s_sequence[s_current_step];
+        unsigned long now = millis();
+        AutoStep& current = s_sequence[s_current_step];
 
-       // Check if it's time to move to the next step
-       if (now - s_step_start_ms >= current.duration_ms) {
-           s_current_step++;
-           s_step_start_ms = now;
+        // Apply the current command to the motor profile
+        // This pipes the data into the exact same path as the BLE commands
+        profile_mecanum_apply(&current.cmd);
 
-           // Check if we finished the last step
-           if (s_current_step >= 7) {
-               automation_stop();
-               return;
-           }
-           Serial.printf("[AUTO] Moving to Step %d\n", s_current_step);
-       }
+        // Check if it's time to move to the next step
+        if (now - s_step_start_ms >= current.duration_ms) {
+            s_current_step++;
+            s_step_start_ms = now;
 
-       // Apply the current command to the motor profile
-       // This pipes the data into the exact same path as the BLE commands
-       profile_mecanum_apply(&s_sequence[s_current_step].cmd);
-   }
+            // Check if we finished the last step
+            if (s_current_step >= s_sequence_len) {
+                automation_stop();
+                return;
+            }
+            Serial.printf("[AUTO] Moving to Step %d\n", s_current_step);
+        }
+    }

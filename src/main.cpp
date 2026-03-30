@@ -192,19 +192,35 @@ void onBleCommand(const char *jsonData, uint16_t length) {
     return; // Malformed JSON - error already logged by command_parser
   }
 
+  // Track toggle states for robust one-shot triggering
+  static bool s_toggle0_latched = false; // Prevents re-triggering until switch is flipped OFF
+  bool currentToggle0 = cmd.toggles[0];
+
   // If the user moves the right joystick significantly while auto is running
   if (automation_is_active() && (fabs(cmd.right.x) > 10 || fabs(cmd.right.y) > 10)) 
   {
-      automation_stop(); // Human takes control!
+      Serial.println("[AUTO] Manual override - stopping");
+      automation_stop(); 
+      // Note: s_toggle0_latched remains true so it doesn't immediately restart
   }
 
-  // If Toggle #0 is switched ON and we aren't already running...
-  if (cmd.toggles[0] && !automation_is_active()) {
-      automation_start();
+  // TRIGGER LOGIC:
+  // 1. If toggle is ON and we haven't "latched" this press yet...
+  if (currentToggle0 && !s_toggle0_latched) {
+      s_toggle0_latched = true; // Latch it immediately
+      if (!automation_is_active()) {
+          Serial.println("[AUTO] Triggered (One-Shot) - starting");
+          automation_start();
+      }
   }
-  // If Toggle #0 is switched OFF while we ARE running...
-  else if (!cmd.toggles[0] && automation_is_active()) {
-      automation_stop();
+  // 2. If toggle is OFF, reset the latch so it can be triggered again later
+  else if (!currentToggle0 && s_toggle0_latched) {
+      s_toggle0_latched = false;
+      Serial.println("[AUTO] Latch reset (Switch turned OFF)");
+      if (automation_is_active()) {
+          Serial.println("[AUTO] Manual stop via switch");
+          automation_stop();
+      }
   }
 
   // Heartbeats only exist to feed the watchdog (done above). No motor
@@ -216,7 +232,10 @@ void onBleCommand(const char *jsonData, uint16_t length) {
   // Route to the main drive motion profile
   if (strcmp(cmd.vehicle, "mecanum") == 0) {
 #ifdef MOTION_PROFILE_MECANUM
-    profile_mecanum_apply(&cmd);
+    // Only apply joystick commands if automation is NOT running
+    if (!automation_is_active()) {
+        profile_mecanum_apply(&cmd);
+    }
 #endif
   }
 
