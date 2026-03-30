@@ -2,7 +2,6 @@
 .pio/
 
 # IDE settings
-.vscode/
 .idea/
 
 # Build output

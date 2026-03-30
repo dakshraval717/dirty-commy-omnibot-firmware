@@ -88,7 +88,10 @@ bool command_parse(const char *json, control_command_t *cmd) {
     return false;
   }
 
-  // Initialize on first call
+  // Initialize the caller's struct with safe defaults first
+  command_init(cmd);
+
+  // Initialize internal state on first call
   if (!s_initialized) {
     command_init(&s_currentCommand);
     s_initialized = true;

@@ -57,13 +57,6 @@ extern "C" {
 #include "gap.h"
 }
 
-// ATT Security flags (from btstack/src/bluetooth.h)
-#define ATT_SECURITY_NONE 0x0000
-#define ATT_SECURITY_ENCRYPTED 0x0001
-#define ATT_SECURITY_AUTHENTICATED 0x0002
-#define ATT_SECURITY_AUTHORIZED 0x0004
-#define ATT_SECURITY_SC 0x0008
-
 // =============================================================================
 // CRC16 IMPLEMENTATION (matching ESP32's esp_crc16_le)
 // =============================================================================

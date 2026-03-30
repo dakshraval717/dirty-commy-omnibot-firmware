@@ -53,8 +53,10 @@
 #include "core/command_parser.h"
 #include "core/motor_manager.h"
 #include "core/safety.h"
+#include "automation.h"
 #include "core/simple_stepper.h"
 #include "drivers/mcp23017.h"
+
 
 // Profiles
 #include "profiles/profile_mecanum.h"
@@ -188,6 +190,21 @@ void onBleCommand(const char *jsonData, uint16_t length) {
   control_command_t cmd;
   if (!command_parse(jsonData, &cmd)) {
     return; // Malformed JSON - error already logged by command_parser
+  }
+
+  // If the user moves the right joystick significantly while auto is running
+  if (automation_is_active() && (fabs(cmd.right.x) > 10 || fabs(cmd.right.y) > 10)) 
+  {
+      automation_stop(); // Human takes control!
+  }
+
+  // If Toggle #0 is switched ON and we aren't already running...
+  if (cmd.toggles[0] && !automation_is_active()) {
+      automation_start();
+  }
+  // If Toggle #0 is switched OFF while we ARE running...
+  else if (!cmd.toggles[0] && automation_is_active()) {
+      automation_stop();
   }
 
   // Heartbeats only exist to feed the watchdog (done above). No motor
@@ -330,6 +347,7 @@ void setup() {
 void loop() {
   // Process BLE events (this is Core 0's main job)
   ble_update();
+  automation_tick(); // Check if it's time for the next move
 
   // Motor update at 50Hz (safety check only)
   unsigned long now = millis();
