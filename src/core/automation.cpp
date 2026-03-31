@@ -13,6 +13,8 @@
    // Internal state variables
    static int s_current_step = -1;       // -1 = Idle/Off
    static unsigned long s_step_start_ms = 0;
+   static bool s_is_pausing = false;     // Are we currently between steps?
+   static const unsigned long STEP_PAUSE_MS = 1000; // 1 second pause
    static const int s_sequence_len = 5;  // 5 steps in the sequence
    static AutoStep s_sequence[s_sequence_len];
 
@@ -56,19 +58,21 @@
        // vy > 0: Forward, vx < 0: Left
        // Assuming 2000ms per meter at current speed settings
        
-       s_sequence[0] = { build_cmd(0, 100, 0),    2000 }; // 1m Forward
-       s_sequence[1] = { build_cmd(-100, 0, 0),   2000 }; // 1m Left
-       s_sequence[2] = { build_cmd(0, 100, 0),    2000 }; // 1m Forward
-       s_sequence[3] = { build_cmd(-100, 0, 0),   2000 }; // 1m Left
-       s_sequence[4] = { build_cmd(-100, 100, 0), 2828 }; // sqrt(2)m at 45 deg (Left + Forward)
+       s_sequence[0] = { build_cmd(0, 0, 100),    2400 }; // 1m Forward
+       s_sequence[1] = { build_cmd(-100, 0, 0),   4000 }; // 1m Left
+       s_sequence[2] = { build_cmd(0, 100, 0),    2400 }; // 1m Forward
+       s_sequence[3] = { build_cmd(-100, 0, 0),   4000 }; // 1m Left
+       s_sequence[4] = { build_cmd(-100, 100, 0), 4000 }; // sqrt(2)m at 45 deg (Left + Forward)
 
        s_current_step = 0;
        s_step_start_ms = millis();
+       s_is_pausing = false; // Reset pause state
        Serial.println("[AUTO] Sequence Started");
    }
 
    void automation_stop() {
        s_current_step = -1;
+       s_is_pausing = false;
 
        // Send a "Stop" command to the motors
        control_command_t stop_cmd = build_cmd(0, 0, 0);
@@ -88,22 +92,35 @@
         safety_feed();
 
         unsigned long now = millis();
-        AutoStep& current = s_sequence[s_current_step];
 
-        // Apply the current command to the motor profile
-        // This pipes the data into the exact same path as the BLE commands
-        profile_mecanum_apply(&current.cmd);
+        if (s_is_pausing) {
+            // --- PAUSE PHASE ---
+            // Send a "Stop" command during the pause
+            control_command_t stop_cmd = build_cmd(0, 0, 0);
+            profile_mecanum_apply(&stop_cmd);
 
-        // Check if it's time to move to the next step
-        if (now - s_step_start_ms >= current.duration_ms) {
-            s_current_step++;
-            s_step_start_ms = now;
+            if (now - s_step_start_ms >= STEP_PAUSE_MS) {
+                s_is_pausing = false;
+                s_current_step++;
+                s_step_start_ms = now;
 
-            // Check if we finished the last step
-            if (s_current_step >= s_sequence_len) {
-                automation_stop();
-                return;
+                // Check if we finished the last step after the pause
+                if (s_current_step >= s_sequence_len) {
+                    automation_stop();
+                    return;
+                }
+                Serial.printf("[AUTO] Moving to Step %d\n", s_current_step);
             }
-            Serial.printf("[AUTO] Moving to Step %d\n", s_current_step);
+        } else {
+            // --- ACTIVE MOVEMENT PHASE ---
+            AutoStep& current = s_sequence[s_current_step];
+            profile_mecanum_apply(&current.cmd);
+
+            // Check if it's time to move to the pause phase
+            if (now - s_step_start_ms >= current.duration_ms) {
+                s_is_pausing = true;
+                s_step_start_ms = now;
+                Serial.println("[AUTO] Move complete, pausing...");
+            }
         }
     }

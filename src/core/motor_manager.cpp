@@ -138,18 +138,7 @@ bool motors_init() {
   // The motor index maps to the physical motor on the MCP23017 (0=M1, 1=M2,
   // etc.)
   static MotorStepperConfig stepperConfigs[NUM_MOTORS] = {
-      {.index = 0, // Motor index maps to M1 on MCP23017
-       .enabled = true,
-       .driverType = driverType,
-       .pinStep = -1,
-       .pinDir = -1,
-       .pinEnable = -1,
-       .stepsPerRev = STEPPER_STEPS_PER_REV,
-       .microstepping = STEPPER_MICROSTEPPING,
-       .direction = -1, // Front-Left
-       .maxSpeed = STEPPER_MAX_SPEED,
-       .acceleration = STEPPER_ACCELERATION},
-      {.index = 1, // Motor index maps to M2 on MCP23017
+      {.index = 0, // Physically M1, logic Front-Right
        .enabled = true,
        .driverType = driverType,
        .pinStep = -1,
@@ -160,7 +149,18 @@ bool motors_init() {
        .direction = 1, // Front-Right
        .maxSpeed = STEPPER_MAX_SPEED,
        .acceleration = STEPPER_ACCELERATION},
-      {.index = 2, // Motor index maps to M3 on MCP23017
+      {.index = 1, // Physically M2, logic Front-Left
+       .enabled = true,
+       .driverType = driverType,
+       .pinStep = -1,
+       .pinDir = -1,
+       .pinEnable = -1,
+       .stepsPerRev = STEPPER_STEPS_PER_REV,
+       .microstepping = STEPPER_MICROSTEPPING,
+       .direction = -1, // Front-Left
+       .maxSpeed = STEPPER_MAX_SPEED,
+       .acceleration = STEPPER_ACCELERATION},
+      {.index = 2, // Physically M3, logic Back-Left
        .enabled = true,
        .driverType = driverType,
        .pinStep = -1,
@@ -171,7 +171,7 @@ bool motors_init() {
        .direction = -1, // Back-Left
        .maxSpeed = STEPPER_MAX_SPEED,
        .acceleration = STEPPER_ACCELERATION},
-      {.index = 3, // Motor index maps to M4 on MCP23017
+      {.index = 3, // Physically M4, logic Back-Right
        .enabled = true,
        .driverType = driverType,
        .pinStep = -1,
