@@ -13,40 +13,54 @@
    // Internal state variables
    static int s_current_step = -1;       // -1 = Idle/Off
    static unsigned long s_step_start_ms = 0;
-   static const int s_sequence_len = 1;  // Only 1 step active for now
-   static AutoStep s_sequence[7];        // Still keeping buffer for 7
+   static const int s_sequence_len = 5;  // 5 steps in the sequence
+   static AutoStep s_sequence[s_sequence_len];
 
    /**
-    * @brief Helper to build a command struct without messy JSON
+    * @brief Helper to build a command struct that matches the BLE JSON format
     */
    control_command_t build_cmd(float vx, float vy, float omega) {
        control_command_t cmd;
-       command_init(&cmd); // Set defaults (type="control", vehicle="mecanum")
+       command_init(&cmd);
 
-       // In mecanum profile: Right Joystick handles translation
+       // Match JSON: {"type":"control","vehicle":"mecanum",...}
+       strcpy(cmd.type, "control");
+       strcpy(cmd.vehicle, "mecanum");
+
+       // Match JSON: "right":{"control":"joystick","x":vx,"y":vy}
        cmd.right.isJoystick = true;
        cmd.right.x = vx;
        cmd.right.y = vy;
+       cmd.right.value = 0.0f;
 
-       // Left Joystick/Dial handles rotation
-       cmd.left.isJoystick = true;
-       cmd.left.x = omega;
+       // Match JSON: "left":{"control":"dial","value":omega}
+       cmd.left.isJoystick = false; // App uses dial for rotation
+       cmd.left.x = 0.0f;
+       cmd.left.y = 0.0f;
+       cmd.left.value = omega;
 
-       cmd.speed = 100; // 100% power
+       // Match JSON: "speed":60
+       cmd.speed = 60; 
+
+       // Initialize arrays to zero
+       for(int i=0; i<6; i++) {
+           cmd.aux[i] = 0.0f;
+           cmd.toggles[i] = false;
+       }
+
        return cmd;
    }
 
    void automation_start() {
        // 1. Define the Sequence
-       // Forward 1m: ~1274ms @ Max Speed
-       // Turn 90:    ~400ms  @ Max Speed
-
-       s_sequence[0] = { build_cmd(0, 100, 0),   100 }; // Forward 1m       
-       s_sequence[1] = { build_cmd(100, 0, 0),   100  }; // Left 1m
-       s_sequence[2] = { build_cmd(0, 100, 0),   100 }; // Forward 1m
-       s_sequence[3] = { build_cmd(100, 0, 0),   100  }; // Left 1m
-       s_sequence[5] = { build_cmd(0, 0, -100),  150  }; // Turn 45 Left
-       s_sequence[6] = { build_cmd(0, 100, 0),   150 }; // Forward 2.5m
+       // vy > 0: Forward, vx < 0: Left
+       // Assuming 2000ms per meter at current speed settings
+       
+       s_sequence[0] = { build_cmd(0, 100, 0),    2000 }; // 1m Forward
+       s_sequence[1] = { build_cmd(-100, 0, 0),   2000 }; // 1m Left
+       s_sequence[2] = { build_cmd(0, 100, 0),    2000 }; // 1m Forward
+       s_sequence[3] = { build_cmd(-100, 0, 0),   2000 }; // 1m Left
+       s_sequence[4] = { build_cmd(-100, 100, 0), 2828 }; // sqrt(2)m at 45 deg (Left + Forward)
 
        s_current_step = 0;
        s_step_start_ms = millis();

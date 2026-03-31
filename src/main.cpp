@@ -182,69 +182,54 @@ void loop1() {
  * @see profile_mecanum_apply() which processes mecanum commands
  */
 void onBleCommand(const char *jsonData, uint16_t length) {
-  // Feed safety watchdog FIRST - ensures any received data resets the
-  // dead-man timer, even if the JSON is malformed
+  // Debug: Log incoming BLE JSON
+  Serial.printf("[BLE RX] %s\n", jsonData);
+  
   safety_feed();
 
-  // Parse JSON into a command struct
   control_command_t cmd;
   if (!command_parse(jsonData, &cmd)) {
-    return; // Malformed JSON - error already logged by command_parser
-  }
-
-  // Track toggle states for robust one-shot triggering
-  static bool s_toggle0_latched = false; // Prevents re-triggering until switch is flipped OFF
-  bool currentToggle0 = cmd.toggles[0];
-
-  // If the user moves the right joystick significantly while auto is running
-  if (automation_is_active() && (fabs(cmd.right.x) > 10 || fabs(cmd.right.y) > 10)) 
-  {
-      Serial.println("[AUTO] Manual override - stopping");
-      automation_stop(); 
-      // Note: s_toggle0_latched remains true so it doesn't immediately restart
-  }
-
-  // TRIGGER LOGIC:
-  // 1. If toggle is ON and we haven't "latched" this press yet...
-  if (currentToggle0 && !s_toggle0_latched) {
-      s_toggle0_latched = true; // Latch it immediately
-      if (!automation_is_active()) {
-          Serial.println("[AUTO] Triggered (One-Shot) - starting");
-          automation_start();
-      }
-  }
-  // 2. If toggle is OFF, reset the latch so it can be triggered again later
-  else if (!currentToggle0 && s_toggle0_latched) {
-      s_toggle0_latched = false;
-      Serial.println("[AUTO] Latch reset (Switch turned OFF)");
-      if (automation_is_active()) {
-          Serial.println("[AUTO] Manual stop via switch");
-          automation_stop();
-      }
-  }
-
-  // Heartbeats only exist to feed the watchdog (done above). No motor
-  // action needed.
-  if (command_is_heartbeat()) {
     return;
   }
 
-  // Route to the main drive motion profile
-  if (strcmp(cmd.vehicle, "mecanum") == 0) {
-#ifdef MOTION_PROFILE_MECANUM
-    // Only apply joystick commands if automation is NOT running
-    if (!automation_is_active()) {
-        profile_mecanum_apply(&cmd);
-    }
-#endif
+  // 1. Handle Manual Override (Joystick > 10)
+  if (automation_is_active() && (fabs(cmd.right.x) > 10 || fabs(cmd.right.y) > 10)) {
+    Serial.println("[AUTO] Manual override - stopping");
+    automation_stop();
   }
+
+  // 2. Only process Toggles and Motion for "control" packets
+  if (strcmp(cmd.type, "control") == 0) {
+    static bool s_toggle0_latched = false;
+    bool currentToggle0 = cmd.toggles[0];
+
+    // Trigger on rising edge (OFF -> ON)
+    if (currentToggle0 && !s_toggle0_latched) {
+      s_toggle0_latched = true;
+      if (!automation_is_active()) {
+        Serial.println("[AUTO] Toggle ON: Starting sequence");
+        automation_start();
+      }
+    }
+    // Reset latch when toggle goes OFF, but DON'T stop automation
+    else if (!currentToggle0 && s_toggle0_latched) {
+      s_toggle0_latched = false;
+      Serial.println("[AUTO] Toggle OFF: Latch reset (automation continues)");
+    }
+
+    // Apply manual control ONLY if automation is idle
+    if (!automation_is_active() && strcmp(cmd.vehicle, "mecanum") == 0) {
+      profile_mecanum_apply(&cmd);
+    }
+  }
+
+  // Heartbeats are handled by the safety_feed() above, no further action needed
 
   // Route to auxiliary motors (Motor 5, DC Motors 3-4)
 #if defined(ENABLE_MOTOR_5) || defined(ENABLE_DC_MOTOR_3) || defined(ENABLE_DC_MOTOR_4)
   profile_aux_motors_apply(&cmd);
 #endif
 }
-
 /**
  * @brief BLE connection state callback: called on connect and disconnect.
  *

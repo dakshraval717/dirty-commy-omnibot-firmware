@@ -204,10 +204,10 @@
 
 // Stepper pulse generation interval (microseconds)
 // Lower = faster response, but more CPU usage
-#define STEPPER_PULSE_INTERVAL_US 210 // was 500
+#define STEPPER_PULSE_INTERVAL_US 400
 
 // Speed deadzone - speeds below this are treated as zero (steps/sec)
-#define STEPPER_SPEED_DEADZONE 10.0f
+#define STEPPER_SPEED_DEADZONE 5.0f
 
 // =============================================================================
 // TIMING PARAMETERS
